@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { 
-  Search, 
-  Plus, 
-  UserPlus, 
-  Eye, 
-  X, 
-  MapPin, 
-  Phone as PhoneIcon, 
-  Calendar as AgeIcon, 
-  Users as GenderIcon 
+import {
+  Search,
+  Plus,
+  UserPlus,
+  Eye,
+  X,
+  MapPin,
+  Phone as PhoneIcon,
+  Calendar as AgeIcon,
+  Users as GenderIcon
 } from "lucide-react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
@@ -64,7 +64,7 @@ export default function Patients() {
   const handleAddPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
-    
+
     if (!name.trim() || !age || !gender || !phone.trim() || !address.trim()) {
       setFormError("All fields are required.");
       return;
@@ -100,7 +100,7 @@ export default function Patients() {
       setPhone("");
       setAddress("");
       setIsAddModalOpen(false);
-      
+
       // Reload Patient List
       loadPatients();
     } catch (err) {
@@ -173,8 +173,8 @@ export default function Patients() {
                 <tbody>
                   {patients.length > 0 ? (
                     patients.map((patient) => (
-                      <tr 
-                        key={patient.id} 
+                      <tr
+                        key={patient.id}
                         className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
                       >
                         <td className="p-4 pl-6">
@@ -301,7 +301,7 @@ export default function Patients() {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. John Doe"
+                    placeholder="e.g. maxamed"
                     className="w-full px-4 py-3 glass-input text-sm"
                   />
                 </div>
@@ -330,9 +330,9 @@ export default function Patients() {
                       onChange={(e) => setGender(e.target.value)}
                       className="w-full px-4 py-3 glass-input text-sm bg-[#0b1329] text-white"
                     >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
+                      <option value="Male" className="bg-[#0b1329] text-white">Male</option>
+                      <option value="Female" className="bg-[#0b1329] text-white">Female</option>
+
                     </select>
                   </div>
                 </div>
@@ -345,7 +345,7 @@ export default function Patients() {
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. +1 (555) 019-2834"
+                    placeholder="e.g. 615000000"
                     className="w-full px-4 py-3 glass-input text-sm"
                   />
                 </div>
@@ -358,7 +358,7 @@ export default function Patients() {
                     rows={2}
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="e.g. 123 Pine St, Seattle, WA"
+                    placeholder="e.g. indhaceel"
                     className="w-full px-4 py-3 glass-input text-sm"
                   />
                 </div>

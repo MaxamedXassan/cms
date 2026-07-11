@@ -8,6 +8,13 @@ export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && supabas
 
 export const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder');
 
+/** Helper function to get current logged in user's ID */
+export async function getCurrentUserId(): Promise<string | null> {
+  if (!isSupabaseConfigured) return 'local-admin';
+  const { data: sessionData } = await supabase.auth.getSession();
+  return sessionData.session?.user?.id || null;
+}
+
 // ─── Types (matching the exact SQL schema) ────────────────────────────────────
 export interface Admin {
   id: string;
@@ -24,6 +31,7 @@ export interface Patient {
   phone: string;
   address: string;
   created_at: string;
+  created_by?: string;
 }
 
 export interface Visit {
@@ -36,6 +44,7 @@ export interface Visit {
   prescription: string;
   notes: string;
   created_at: string;
+  created_by?: string;
 }
 
 // Status values match the CHECK constraint: 'Paid' | 'Pending' | 'Partial'
@@ -51,6 +60,7 @@ export interface Finance {
   created_at: string;
   patient_name?: string; // hydrated from join
   visit_date?: string;   // hydrated from join
+  created_by?: string;
 }
 
 export interface Settings {
@@ -59,6 +69,7 @@ export interface Settings {
   logo_url: string;
   currency: string;
   default_consult_fee: number;
+  created_by?: string;
 }
 
 // ─── LocalStorage Fallback (for when Supabase is not configured) ──────────────
@@ -280,11 +291,12 @@ export const db = {
   // ── SETTINGS ──────────────────────────────────────────────────────────────
   async getSettings(): Promise<Settings> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('id', 1)
-        .maybeSingle();
+      const userId = await getCurrentUserId();
+      let req = supabase.from('settings').select('*').eq('id', 1);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data, error } = await req.maybeSingle();
       if (!error && data) return data as Settings;
       if (error) console.warn('Supabase getSettings error, using defaults:', error);
     }
@@ -295,12 +307,12 @@ export const db = {
 
   async updateSettings(updated: Partial<Settings>): Promise<Settings> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from('settings')
-        .update(updated)
-        .eq('id', 1)
-        .select()
-        .single();
+      const userId = await getCurrentUserId();
+      let req = supabase.from('settings').update(updated).eq('id', 1);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data, error } = await req.select().single();
       if (!error && data) return data as Settings;
       console.warn('Supabase updateSettings error:', error);
     }
@@ -314,7 +326,11 @@ export const db = {
   // ── PATIENTS ──────────────────────────────────────────────────────────────
   async getPatients(query = ''): Promise<Patient[]> {
     if (isSupabaseConfigured) {
+      const userId = await getCurrentUserId();
       let req = supabase.from('patients').select('*');
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
       if (query) req = req.or(`name.ilike.%${query}%,phone.ilike.%${query}%`);
       const { data, error } = await req.order('created_at', { ascending: false });
       if (!error && data) return data as Patient[];
@@ -332,7 +348,12 @@ export const db = {
 
   async getPatientById(id: string): Promise<Patient | null> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('patients').select('*').eq('id', id).maybeSingle();
+      const userId = await getCurrentUserId();
+      let req = supabase.from('patients').select('*').eq('id', id);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data, error } = await req.maybeSingle();
       if (!error && data) return data as Patient;
       console.warn('Supabase getPatientById error:', error);
     }
@@ -343,7 +364,9 @@ export const db = {
 
   async addPatient(patient: Omit<Patient, 'id' | 'created_at'>): Promise<Patient> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('patients').insert([patient]).select().single();
+      const userId = await getCurrentUserId();
+      const payload = userId ? { ...patient, created_by: userId } : patient;
+      const { data, error } = await supabase.from('patients').insert([payload]).select().single();
       if (!error && data) return data as Patient;
       console.warn('Supabase addPatient error:', error);
     }
@@ -362,7 +385,12 @@ export const db = {
 
   async updatePatient(id: string, updates: Partial<Omit<Patient, 'id' | 'created_at'>>): Promise<Patient | null> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('patients').update(updates).eq('id', id).select().single();
+      const userId = await getCurrentUserId();
+      let req = supabase.from('patients').update(updates).eq('id', id);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data, error } = await req.select().single();
       if (!error && data) return data as Patient;
       console.warn('Supabase updatePatient error:', error);
     }
@@ -380,7 +408,12 @@ export const db = {
 
   async deletePatient(id: string): Promise<boolean> {
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('patients').delete().eq('id', id);
+      const userId = await getCurrentUserId();
+      let req = supabase.from('patients').delete().eq('id', id);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { error } = await req;
       if (!error) return true;
       console.warn('Supabase deletePatient error:', error);
     }
@@ -395,11 +428,15 @@ export const db = {
   // ── VISITS ────────────────────────────────────────────────────────────────
   async getVisits(patientId: string): Promise<Visit[]> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
+      const userId = await getCurrentUserId();
+      let req = supabase
         .from('visits')
         .select('*')
-        .eq('patient_id', patientId)
-        .order('date', { ascending: false });
+        .eq('patient_id', patientId);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data, error } = await req.order('date', { ascending: false });
       if (!error && data) return data as Visit[];
       console.warn('Supabase getVisits error:', error);
     }
@@ -415,24 +452,28 @@ export const db = {
     financeData: { consult_fee: number; med_cost: number }
   ): Promise<{ visit: Visit; finance: Finance }> {
     if (isSupabaseConfigured) {
+      const userId = await getCurrentUserId();
+      const visitPayload = userId ? { ...visit, created_by: userId } : visit;
       // Insert visit (date defaults to CURRENT_DATE in Postgres)
       const { data: vData, error: vError } = await supabase
         .from('visits')
-        .insert([{ ...visit }])
+        .insert([visitPayload])
         .select()
         .single();
 
       if (!vError && vData) {
         // Insert finance (total & remaining are GENERATED columns — do NOT send them)
+        const financePayload = {
+          visit_id: vData.id,
+          consult_fee: financeData.consult_fee,
+          med_cost: financeData.med_cost,
+          paid: 0,
+          status: 'Pending' as const,
+          ...(userId ? { created_by: userId } : {})
+        };
         const { data: fData, error: fError } = await supabase
           .from('finance')
-          .insert([{
-            visit_id: vData.id,
-            consult_fee: financeData.consult_fee,
-            med_cost: financeData.med_cost,
-            paid: 0,
-            status: 'Pending',
-          }])
+          .insert([financePayload])
           .select()
           .single();
 
@@ -483,7 +524,8 @@ export const db = {
   // ── FINANCE ───────────────────────────────────────────────────────────────
   async getFinanceRecords(): Promise<Finance[]> {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
+      const userId = await getCurrentUserId();
+      let req = supabase
         .from('finance')
         .select(`
           *,
@@ -491,8 +533,11 @@ export const db = {
             date,
             patients ( name )
           )
-        `)
-        .order('created_at', { ascending: false });
+        `);
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data, error } = await req.order('created_at', { ascending: false });
 
       if (!error && data) {
         return data.map((f: any) => ({
@@ -530,7 +575,12 @@ export const db = {
 
   async updateFinancePayment(financeId: string, additionalPaid: number): Promise<Finance | null> {
     if (isSupabaseConfigured) {
-      const { data: current } = await supabase.from('finance').select('*').eq('id', financeId).single();
+      const userId = await getCurrentUserId();
+      let selectReq = supabase.from('finance').select('*').eq('id', financeId);
+      if (userId) {
+        selectReq = selectReq.eq('created_by', userId);
+      }
+      const { data: current } = await selectReq.single();
       if (current) {
         const newPaid = Number(current.paid) + additionalPaid;
         const total = Number(current.total);
@@ -539,10 +589,14 @@ export const db = {
         else if (newPaid > 0) newStatus = 'Partial';
 
         // NOTE: 'total' and 'remaining' are GENERATED columns — cannot update them
-        const { data, error } = await supabase
+        let updateReq = supabase
           .from('finance')
           .update({ paid: newPaid, status: newStatus })
-          .eq('id', financeId)
+          .eq('id', financeId);
+        if (userId) {
+          updateReq = updateReq.eq('created_by', userId);
+        }
+        const { data, error } = await updateReq
           .select()
           .single();
         if (!error && data) return data as Finance;
@@ -575,7 +629,12 @@ export const db = {
     let visits: Visit[] = [];
 
     if (isSupabaseConfigured) {
-      const { data } = await supabase.from('visits').select('*');
+      const userId = await getCurrentUserId();
+      let req = supabase.from('visits').select('*');
+      if (userId) {
+        req = req.eq('created_by', userId);
+      }
+      const { data } = await req;
       visits = (data as Visit[]) || [];
     } else {
       const vRaw = typeof window !== 'undefined' ? localStorage.getItem('cms_visits') || '[]' : '[]';
