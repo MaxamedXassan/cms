@@ -14,7 +14,8 @@ import {
   X,
   PlusCircle,
   AlertCircle,
-  FileText
+  FileText,
+  Printer
 } from "lucide-react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
@@ -36,6 +37,7 @@ export default function PatientProfile({ params }: PageProps) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedVisitForReport, setSelectedVisitForReport] = useState<Visit | null>(null);
 
   // Visit Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -249,13 +251,28 @@ export default function PatientProfile({ params }: PageProps) {
                           
                           {/* Visit Details Card */}
                           <div className="glass-panel p-5 rounded-2xl border border-white/5 space-y-4">
-                            <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-white/5 pb-3">
                               <span className="text-xs text-slate-400 font-mono">
-                                {new Date(visit.date).toLocaleString()}
+                                Logged: {new Date(visit.created_at).toLocaleString(undefined, {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
                               </span>
-                              <span className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-slate-300 font-semibold font-mono">
-                                ID: {visit.id.substring(0, 8)}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setSelectedVisitForReport(visit)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-cyan-300 text-xs font-semibold transition-all duration-200"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                                  View Medical Report
+                                </button>
+                                <span className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-slate-400 font-mono">
+                                  ID: {visit.id.substring(0, 8)}
+                                </span>
+                              </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -464,6 +481,190 @@ export default function PatientProfile({ params }: PageProps) {
           )
         )}
       </main>
+
+      {/* Medical Report Modal */}
+      {selectedVisitForReport && patient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b1329]/80 backdrop-blur-md overflow-y-auto no-print">
+          <div className="relative w-full max-w-3xl bg-[#111c44]/95 border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Inject Print Styles dynamically */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @media print {
+                body {
+                  visibility: hidden !important;
+                  background: white !important;
+                }
+                #printable-medical-report {
+                  visibility: visible !important;
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
+                  height: auto !important;
+                  background: white !important;
+                  color: black !important;
+                  font-family: ui-sans-serif, system-ui, sans-serif !important;
+                }
+                #printable-medical-report * {
+                  visibility: visible !important;
+                  color: black !important;
+                  border-color: #cbd5e1 !important;
+                }
+                .no-print {
+                  display: none !important;
+                }
+              }
+            `}} />
+
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-white/5 pb-4">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-bold text-white">Medical Statement</h3>
+              </div>
+              <button
+                onClick={() => setSelectedVisitForReport(null)}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Printable Content Area */}
+            <div id="printable-medical-report" className="space-y-6 text-left">
+              
+              {/* Clinic Header */}
+              <div className="flex justify-between items-start border-b border-slate-200 dark:border-white/5 pb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-cyan-400 print:text-black">
+                    {settings?.clinic_name || "Apex Care Clinic"}
+                  </h2>
+                  <p className="text-xs text-slate-400 print:text-slate-600 font-mono mt-1">
+                    Medical Statement & Patient Visit Report
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-400 print:text-slate-600 font-semibold">Report Date</p>
+                  <p className="text-sm font-semibold text-white print:text-black mt-0.5">
+                    {new Date().toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Patient Details Sub-panel */}
+              <div className="p-5 rounded-2xl bg-white/5 border border-white/5 print:bg-slate-50 print:border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">Patient Name</p>
+                  <p className="text-sm font-bold text-white print:text-black mt-1">{patient.name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">Age</p>
+                  <p className="text-sm font-semibold text-white print:text-black mt-1">{patient.age} Years</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">Gender</p>
+                  <p className="text-sm font-semibold text-white print:text-black mt-1">{patient.gender}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">Visit Time</p>
+                  <p className="text-sm font-semibold text-cyan-400 print:text-black mt-1">
+                    {new Date(selectedVisitForReport.created_at).toLocaleString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Medical Report Clinical Details */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
+                  {/* Chief Complaint */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">1. Chief Complaint</span>
+                    <p className="text-sm text-white print:text-black font-medium leading-relaxed">
+                      {selectedVisitForReport.complaint}
+                    </p>
+                  </div>
+
+                  {/* Final Diagnosis */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">2. Final Diagnosis</span>
+                    <p className="text-sm text-cyan-300 print:text-black font-semibold leading-relaxed">
+                      {selectedVisitForReport.diagnosis}
+                    </p>
+                  </div>
+
+                  {/* Treatment Given */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">3. Treatment Given</span>
+                    <p className="text-sm text-slate-200 print:text-black leading-relaxed">
+                      {selectedVisitForReport.treatment}
+                    </p>
+                  </div>
+
+                  {/* Prescribed Medicines */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">4. Prescribed Medicines</span>
+                    <p className="text-sm text-emerald-400 print:text-black font-mono font-medium leading-relaxed">
+                      {selectedVisitForReport.prescription}
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Additional Notes */}
+                {selectedVisitForReport.notes && (
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider font-semibold">5. Additional Notes</span>
+                    <p className="text-sm text-slate-300 print:text-black italic leading-relaxed">
+                      {selectedVisitForReport.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Hospital Signoff */}
+              <div className="pt-8 border-t border-dashed border-slate-200 dark:border-white/5 flex justify-between items-end">
+                <div className="text-xs text-slate-400 print:text-slate-500">
+                  <p>Visit ID: {selectedVisitForReport.id}</p>
+                  <p className="mt-1">Generated by CareFlow Portal</p>
+                </div>
+                <div className="text-center w-48 border-t border-slate-200 dark:border-white/10 pt-2 print:border-slate-300">
+                  <p className="text-[10px] text-slate-400 print:text-slate-500 uppercase tracking-wider">Attending Physician</p>
+                  <div className="h-6" />
+                  <p className="text-xs font-semibold text-slate-300 print:text-black">Authorized Signature</p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer / Print Action */}
+            <div className="flex justify-end gap-3 border-t border-white/5 pt-4">
+              <button
+                type="button"
+                onClick={() => setSelectedVisitForReport(null)}
+                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-semibold transition-colors"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-500/20 active:scale-98 transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                Print Report
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
